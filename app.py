@@ -2,17 +2,26 @@ import random
 import spacy
 import requests
 import os
-from typing import Optional
-from flask import Flask, abort, jsonify, request
 
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+
+
+load_dotenv()
+
+nlp = spacy.load('en_core_web_md')
 
 ## Data
 question_answers = {
-    "Hello": ["hi", "hey", "how is going"],
-    "The weather": ["example fetch weater ... in code", "you can look code snippets in github", "i cant provide weater api currently"],
+    "Weather": ["example fetch weater ... in code", "you can look code snippets in github", "i cant provide weater api currently"],
     "What is your name?": ["I am a chatbot.", "You can call me SpaCyBot."],
     "How are you?": ["I'm just a program, so I don't have feelings, but thanks for asking!"],
     "Python programming": ["Python is a versatile programming language.", "It is known for its readability and ease of use."],
+    "Hello": ["Hi there!", "Greetings!", "Hello! How can I assist you?"],
+    "Good morning": ["Good morning! How can I help?", "Morning! What can I do for you?"],
+    "Parse this sentence": ["Sure! I can help analyze the sentence structure."],
 }
 
 
@@ -61,68 +70,30 @@ def translate(payload: dict) -> Optional[str]:
 
         return tranlsated
 
-    print(payload, response)
-
-
     return None
 
 
 
-
-app = Flask(__name__)
-
-nlp = spacy.load('en_core_web_md', disable=['parser', 'ner'])
-
-@app.errorhandler(400)
-def custom400(error):
-    response = jsonify({'message': error.description})
-    return response
+app = FastAPI()
 
 
-@app.route("/api/v1/chatbot", methods=["GET"])
-def index():
-    user_input = request.args.get("input", "help")
-    lang = request.args.get("lang", None)
-    bot_response = None
-
-    if not lang:
-        return abort(400, 'must provide lang :: en, my')
-
-    if lang == "en":
-        translated_user_input = translate(payload = {
-            "source": "en",
-            "target": "my",
-            "q": user_input
-        })
-
-        if not translated_user_input:
-            return abort(400, "Failed translate")
-
-        bot_response = get_response(translated_user_input.lower())
-    elif lang == "my":
-        translated_user_input = translate(payload = {
-            "source": "my",
-            "target": "en",
-            "q": user_input
-        })
-
-        if not translated_user_input:
-            return abort(400, "Failed translate")
-
-        bot_response = get_response(translated_user_input.lower())
-
-    bot_response = translate(payload={
-        "source": "en",
-        "target": "my",
-        "q": bot_response
-    })
-
-    if not bot_response:
-        return abort(400, "Failed translate")
-
-    return jsonify({ "user": user_input, "bot": bot_response })
+class Message(BaseModel):
+    user_input: str
+    # lang: Literal["en", "my"]
+    lang: str
 
 
-@app.route("/api/v1/may-error", methods=["GET"])
-def maybe_error():
-    return abort(status=500)
+@app.post("/api/v1/chatbot")
+async def index(message: Message):
+    user_input = message.user_input
+
+    if message.lang == "my":
+        user_input = translate(payload={"source": "my", "target": "en", "q": message.user_input})
+        if not user_input:
+            assert HTTPException(status_code=400, detail="failed translate")
+
+    mm_bot_response = get_response(user_input)
+    if not mm_bot_response:
+        assert HTTPException(status_code=400, detail="failed translate")
+
+    return { "bot": mm_bot_response, "user_input": user_input }
