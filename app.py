@@ -1,7 +1,6 @@
 import random
 import spacy
 import requests
-import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -10,6 +9,8 @@ from typing import Optional
 
 
 load_dotenv()
+
+APIKEY = "74cf32adb0msha9568d15b271819p103232jsnfd977803a28b"
 
 nlp = spacy.load('en_core_web_md')
 
@@ -39,7 +40,7 @@ def get_response(user_input):
 def weather(city: str):
     url = f"https://open-weather13.p.rapidapi.com/city/{city}"
     headers = {
-        "X-RapidAPI-Key": os.getenv("API_KEY"),
+        "X-RapidAPI-Key": APIKEY,
         "X-RapidAPI-Host": "open-weather13.p.rapidapi.com"
     }
     response = requests.get(url, headers=headers)
@@ -51,7 +52,7 @@ def translate(payload: dict) -> Optional[str]:
     headers = {
         "content-type": "application/x-www-form-urlencoded",
         "Accept-Encoding": "application/gzip",
-        "X-RapidAPI-Key": os.getenv("API_KEY"),
+        "X-RapidAPI-Key": APIKEY,
         "X-RapidAPI-Host": "google-translate1.p.rapidapi.com"
     }
     response = requests.post(url, data=payload, headers=headers)
@@ -92,7 +93,8 @@ async def index(message: Message):
         if not user_input:
             assert HTTPException(status_code=400, detail="failed translate")
 
-    mm_bot_response = get_response(user_input)
+    bot_response = get_response(user_input)
+    mm_bot_response = translate(payload={"source": "en", "target": "my", "q": bot_response})
     if not mm_bot_response:
         assert HTTPException(status_code=400, detail="failed translate")
 
